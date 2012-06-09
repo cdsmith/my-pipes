@@ -12,12 +12,17 @@ module Pipes (
     Pipe,
     (>+>),
     (<+<),
+    leftP,
+    rightP,
+    leftResultP,
+    rightResultP,
+    collectLeftovers,
+    discardLeftovers,
     simulatePipe,
     runPipe,
-    PipeC(..),
-    FinalC(..),
     await,
     withAwait,
+    mapResultP,
     forP,
     mapP,
     concatMapP,
@@ -30,10 +35,8 @@ module Pipes (
     consume,
     consumeToo,
     peek,
-    leftP,
-    rightP,
-    collectLeftovers,
-    discardLeftovers
+    PipeC(..),
+    FinalC(..)
     ) where
 
 import Prelude hiding (id, (.))
@@ -105,18 +108,67 @@ p >+> Await f   = upstream p
 (<+<) :: Monad m => Pipe NoLeftovers b c s m t -> Pipe lo a b r m s -> Pipe lo a c r m t
 (<+<) = flip (>+>)
 
+leftP :: Monad m => Pipe lo a b u m r -> Pipe lo (Either a c) (Either b c) u m r
+leftP (Yield   x p) = Yield   (Left x) (leftP p)
+leftP (UnAwait x p) = UnAwait (Left x) (leftP p)
+leftP (Do      m  ) = Do      (liftM leftP m)
+leftP (Done    r  ) = Done    r
+leftP (Await   f  ) = Await   go
+    where go (Left  r        ) = leftP (f (Left r))
+          go (Right (Left  a)) = leftP (f (Right a))
+          go (Right (Right c)) = Yield (Right c) (Await go)
+
+rightP :: Monad m => Pipe lo a b u m r -> Pipe lo (Either c a) (Either c b) u m r
+rightP (Yield   x p) = Yield   (Right x) (rightP p)
+rightP (UnAwait x p) = UnAwait (Right x) (rightP p)
+rightP (Do      m  ) = Do      (liftM rightP m)
+rightP (Done    r  ) = Done    r
+rightP (Await   f  ) = Await   go
+    where go (Left  r        ) = rightP (f (Left r))
+          go (Right (Right a)) = rightP (f (Right a))
+          go (Right (Left  c)) = Yield (Left c) (Await go)
+
+leftResultP :: Monad m => Pipe lo a b u m r -> Pipe lo a b (Either u s) m (Either r s)
+leftResultP (Yield   x p) = Yield   x (leftResultP p)
+leftResultP (UnAwait x p) = UnAwait x (leftResultP p)
+leftResultP (Do      m  ) = Do      (liftM leftResultP m)
+leftResultP (Done    r  ) = Done    (Left r)
+leftResultP (Await   f  ) = Await   go
+    where go (Right a        ) = leftResultP (f (Right a))
+          go (Left  (Left  u)) = leftResultP (f (Left  u))
+          go (Left  (Right s)) = Done  (Right s)
+
+rightResultP :: Monad m => Pipe lo a b u m r -> Pipe lo a b (Either s u) m (Either s r)
+rightResultP (Yield   x p) = Yield   x (rightResultP p)
+rightResultP (UnAwait x p) = UnAwait x (rightResultP p)
+rightResultP (Do      m  ) = Do      (liftM rightResultP m)
+rightResultP (Done    r  ) = Done    (Right r)
+rightResultP (Await   f  ) = Await   go
+    where go (Right a        ) = rightResultP (f (Right a))
+          go (Left  (Right u)) = rightResultP (f (Left  u))
+          go (Left  (Left  s)) = Done   (Left s)
+
+collectLeftovers :: Monad m => Pipe Leftovers a b u m r -> Pipe NoLeftovers a b u m (r, [a])
+collectLeftovers = go []
+    where go xs     (Yield   x p) = Yield x (go xs p)
+          go xs     (UnAwait x p) = go (x:xs) p
+          go (x:xs) (Await   f  ) = go xs (f (Right x))
+          go []     (Await   f  ) = Await (go [] . f)
+          go xs     (Do      m  ) = Do    (liftM (go xs) m)
+          go xs     (Done    r  ) = Done  (r, xs)
+
+discardLeftovers :: Monad m => Pipe Leftovers a b u m r -> Pipe NoLeftovers a b u m r
+discardLeftovers = fmap fst . collectLeftovers
+
 simulatePipe :: (Monad m, MonadTrans t, Monad (t m))
              => t m (Either u a)
              -> (b -> t m ())
-             -> Pipe lo a b u m r
-             -> t m (r, [a])
-simulatePipe up down = go []
-    where go xs     (Yield   x p) = down x >> go xs p
-          go (x:xs) (Await   f)   = go xs (f (Right x))
-          go []     (Await   f)   = go [] . f =<< up
-          go xs     (UnAwait x p) = go (x:xs) p
-          go xs     (Do      m)   = lift m >>= go xs
-          go xs     (Done    x)   = return (x, xs)
+             -> Pipe NoLeftovers a b u m r
+             -> t m r
+simulatePipe up down (Yield   x p) = down x >> simulatePipe up down p
+simulatePipe up down (Await   f)   = simulatePipe up down . f =<< up
+simulatePipe up down (Do      m)   = lift m >>= simulatePipe up down
+simulatePipe up down (Done    x)   = return x
 
 newtype IdentityT m a = IdentityT { runIdentityT :: m a }
 
@@ -127,25 +179,10 @@ instance Monad m => Monad (IdentityT m) where
 instance MonadTrans IdentityT where lift = IdentityT
 instance MonadIO m => MonadIO (IdentityT m) where liftIO = lift . liftIO
 
-runPipe :: Monad m => Pipe lo () Void u m r -> m r
-runPipe = liftM fst
-        . runIdentityT
+runPipe :: Monad m => Pipe NoLeftovers () Void u m r -> m r
+runPipe = runIdentityT
         . simulatePipe (return (Right ()))
                        (error "runPipe: impossible yield")
-
-newtype PipeC m r a b = PipeC (Pipe NoLeftovers a b r m r)
-instance Monad m => Category (PipeC m r) where
-    id                    = PipeC idP
-    (PipeC p) . (PipeC q) = PipeC (q >+> p)
-
-newtype FinalC a m u r = FinalC (Pipe NoLeftovers a a u m r)
-instance Monad m => Category (FinalC a m) where
-    id                      = FinalC idP
-    (FinalC p) . (FinalC q) = FinalC (q >+> p)
-
-instance Monad m => Arrow (FinalC a m) where
-    arr   f          = FinalC (fmap f idP)
-    first (FinalC p) = FinalC $ (,) <$> fmap fst idP >+> p <*> fmap snd idP
 
 instance MonadStream m => MonadStream (EitherT e m) where
     type Upstream     (EitherT e m) = Upstream     m
@@ -163,6 +200,9 @@ await = tryAwait >>= either left return
 
 withAwait :: MonadStream m => EitherT (StreamResult m) m (StreamResult m) -> m (StreamResult m)
 withAwait = liftM (either id id) . runEitherT
+
+mapResultP :: (MonadStream m, Upstream m ~ Downstream m) => (StreamResult m -> r) -> m r
+mapResultP f = liftM f idP
 
 forP :: MonadStream m => (Upstream m -> m r) -> m (StreamResult m)
 forP f = tryAwait >>= either return ((>> forP f) . f)
@@ -202,14 +242,12 @@ consumeToo = tryAwait >>= either (return . ([],)) (\x -> liftM (first (x:)) cons
 peek :: MonadUnStream m => m (Either (StreamResult m) (Upstream m))
 peek = tryAwait >>= either (return . Left) (\x -> unawait x >> return (Right x))
 
-leftP :: Monad m => Pipe lo a b u m r -> Pipe lo (Either a c) (Either b c) u m r
-leftP p = undefined
+newtype PipeC m r a b = PipeC (Pipe NoLeftovers a b r m r)
+instance Monad m => Category (PipeC m r) where
+    id                    = PipeC idP
+    (PipeC p) . (PipeC q) = PipeC (q >+> p)
 
-rightP :: Monad m => Pipe lo a b r m s -> Pipe lo (Either c a) (Either c b) r m s
-rightP p = undefined
-
-collectLeftovers :: Monad m => Pipe Leftovers a b u m r -> Pipe NoLeftovers a b u m (r, [a])
-collectLeftovers = undefined
-
-discardLeftovers :: Monad m => Pipe Leftovers a b u m r -> Pipe NoLeftovers a b u m r
-discardLeftovers = fmap fst . collectLeftovers
+newtype FinalC a m u r = FinalC (Pipe NoLeftovers a a u m r)
+instance Monad m => Category (FinalC a m) where
+    id                      = FinalC idP
+    (FinalC p) . (FinalC q) = FinalC (q >+> p)

@@ -39,13 +39,9 @@ import Prelude hiding (id, (.))
 import Control.Applicative
 import Control.Arrow (first)
 import Control.Category
-import Control.Exception
 import Control.Monad
-import Control.Monad.State
 import Control.Monad.Trans
 import Control.Monad.Trans.Either
-import Data.Monoid
-import Data.Typeable
 import Data.Void
 
 class Monad m => MonadStream m where

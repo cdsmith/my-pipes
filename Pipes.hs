@@ -15,6 +15,8 @@ module Pipes (
     runPipe,
     PipeC(..),
     FinalC(..),
+    await,
+    withAwait,
     forP,
     mapP,
     concatMapP,
@@ -41,6 +43,7 @@ import Control.Exception
 import Control.Monad
 import Control.Monad.State
 import Control.Monad.Trans
+import Control.Monad.Trans.Either
 import Data.Monoid
 import Data.Typeable
 import Data.Void
@@ -139,6 +142,23 @@ newtype FinalC a m u r = FinalC (Pipe NoLeftovers a a u m r)
 instance Monad m => Category (FinalC a m) where
     id                      = FinalC idP
     (FinalC p) . (FinalC q) = FinalC (q >+> p)
+
+instance MonadStream m => MonadStream (EitherT e m) where
+    type Upstream     (EitherT e m) = Upstream     m
+    type Downstream   (EitherT e m) = Downstream   m
+    type StreamResult (EitherT e m) = StreamResult m
+
+    yield = lift . yield
+    tryAwait = lift tryAwait
+
+instance MonadUnStream m => MonadUnStream (EitherT e m) where
+    unawait = lift . unawait
+
+await :: MonadStream m => EitherT (StreamResult m) m (Upstream m)
+await = tryAwait >>= either left return
+
+withAwait :: MonadStream m => EitherT (StreamResult m) m (StreamResult m) -> m (StreamResult m)
+withAwait = liftM (either id id) . runEitherT
 
 forP :: MonadStream m => (Upstream m -> m r) -> m (StreamResult m)
 forP f = tryAwait >>= either return ((>> forP f) . f)

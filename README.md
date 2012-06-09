@@ -17,6 +17,9 @@ The primitive stream operations are:
   - `tryAwait` waits for upstream `yield` or termination
   - `yield` yields a value to downstream
 
+The `await` operation is provided via `EitherT`, and a corresponding `withAwait` to
+unwrap the `EitherT` at the top level.
+
 Exceptions and finalization are to be decided.
 
 Note that `simulatePipe` is the fundamental abstraction for running a `Pipe`.  The more

@@ -11,6 +11,7 @@ module Pipes (
     NoLeftovers,
     Pipe,
     (>+>),
+    (<+<),
     simulatePipe,
     runPipe,
     PipeC(..),
@@ -37,7 +38,7 @@ module Pipes (
 
 import Prelude hiding (id, (.))
 import Control.Applicative
-import Control.Arrow (first)
+import Control.Arrow hiding (left)
 import Control.Category
 import Control.Monad
 import Control.Monad.Trans
@@ -101,6 +102,9 @@ p >+> Await f   = upstream p
           upstream (Await   g  ) = Await (upstream . g)
           upstream (UnAwait x q) = UnAwait x (upstream q)
 
+(<+<) :: Monad m => Pipe NoLeftovers b c s m t -> Pipe lo a b r m s -> Pipe lo a c r m t
+(<+<) = flip (>+>)
+
 simulatePipe :: (Monad m, MonadTrans t, Monad (t m))
              => t m (Either u a)
              -> (b -> t m ())
@@ -138,6 +142,10 @@ newtype FinalC a m u r = FinalC (Pipe NoLeftovers a a u m r)
 instance Monad m => Category (FinalC a m) where
     id                      = FinalC idP
     (FinalC p) . (FinalC q) = FinalC (q >+> p)
+
+instance Monad m => Arrow (FinalC a m) where
+    arr   f          = FinalC (fmap f idP)
+    first (FinalC p) = FinalC $ (,) <$> fmap fst idP >+> p <*> fmap snd idP
 
 instance MonadStream m => MonadStream (EitherT e m) where
     type Upstream     (EitherT e m) = Upstream     m
@@ -200,8 +208,8 @@ leftP p = undefined
 rightP :: Monad m => Pipe lo a b r m s -> Pipe lo (Either c a) (Either c b) r m s
 rightP p = undefined
 
-collectLeftovers :: MonadIO m => Pipe Leftovers a b u m r -> Pipe NoLeftovers a b u m (r, [a])
+collectLeftovers :: Monad m => Pipe Leftovers a b u m r -> Pipe NoLeftovers a b u m (r, [a])
 collectLeftovers = undefined
 
-discardLeftovers :: MonadIO m => Pipe Leftovers a b u m r -> Pipe NoLeftovers a b u m r
-discardLeftovers = undefined
+discardLeftovers :: Monad m => Pipe Leftovers a b u m r -> Pipe NoLeftovers a b u m r
+discardLeftovers = fmap fst . collectLeftovers

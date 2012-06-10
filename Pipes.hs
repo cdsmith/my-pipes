@@ -251,7 +251,7 @@ instance Monad m => Monad (Pipe lo a b u m) where
     Done    r   >>= f = f r
 
 instance Monad m => Functor (Pipe lo a b u m) where fmap  = liftM
-instance Monad m => Applicative (Pipe lo a b u m) where pure = return ; (<*>) = ap
+instance Monad m => Applicative (Pipe lo a b u m) where pure = return; (<*>) = ap
 instance MonadTrans (Pipe lo a b u) where lift m = Do (liftM Done m)
 instance MonadIO m => MonadIO (Pipe lo a b u m) where liftIO = lift . liftIO
 
@@ -266,10 +266,10 @@ instance Monad m => MonadStream (Pipe lo a b u m) where
 instance Monad m => MonadUnStream (Pipe Leftovers a b u m) where
     unawait x = UnAwait x (Done ())
 
--- | The 'Pipe' composition operator.  Combines two pipes, matching the yields and
--- returns from the upstream pipe to the awaits of the downstream pipe.  Composition
--- is associative, and 'idP' acts as an identity, so that '(>+>)' is the composition
--- for a category on pipes without leftovers.
+-- | The 'Pipe' composition operator.  Combines two pipes, matching the yields
+-- and returns from the upstream pipe to the awaits of the downstream pipe.
+-- Composition is associative, and 'idP' acts as an identity, so that '(>+>)'
+-- is the composition for a category on pipes without leftovers.
 (>+>) :: Monad m => Pipe lo a b r m s -> Pipe NoLeftovers b c s m t -> Pipe lo a c r m t
 p >+> Yield x q = Yield x (p >+> q)
 p >+> Do    m   = Do    (liftM (p >+>) m)
@@ -285,8 +285,8 @@ p >+> Await f   = upstream p
 (<+<) :: Monad m => Pipe NoLeftovers b c s m t -> Pipe lo a b r m s -> Pipe lo a c r m t
 (<+<) = flip (>+>)
 
--- | Modifies a 'Pipe' to act on the left side of an 'Either' type.  The right side is
--- passed through unchanged.
+-- | Modifies a 'Pipe' to act on the left side of an 'Either' type.  The right
+-- side is passed through unchanged.
 leftP :: Monad m => Pipe lo a b u m r -> Pipe lo (Either a c) (Either b c) u m r
 leftP (Yield   x p) = Yield   (Left x) (leftP p)
 leftP (UnAwait x p) = UnAwait (Left x) (leftP p)
@@ -297,8 +297,8 @@ leftP (Await   f  ) = Await   go
           go (Right (Left  a)) = leftP (f (Right a))
           go (Right (Right c)) = Yield (Right c) (Await go)
 
--- | Modifies a 'Pipe' to act on the right side of an 'Either' type.  The left side is
--- passed through unchanged.
+-- | Modifies a 'Pipe' to act on the right side of an 'Either' type.  The left
+-- side is passed through unchanged.
 rightP :: Monad m => Pipe lo a b u m r -> Pipe lo (Either c a) (Either c b) u m r
 rightP (Yield   x p) = Yield   (Right x) (rightP p)
 rightP (UnAwait x p) = UnAwait (Right x) (rightP p)
@@ -309,9 +309,9 @@ rightP (Await   f  ) = Await   go
           go (Right (Right a)) = rightP (f (Right a))
           go (Right (Left  c)) = Yield (Left c) (Await go)
 
--- | Modifies a 'Pipe' to act on the left side of an 'Either' return type.  If the
--- upstream pipe terminates with a 'Right' value, the new pipe also terminates with
--- the same value.
+-- | Modifies a 'Pipe' to act on the left side of an 'Either' return type.  If
+-- the upstream pipe terminates with a 'Right' value, the new pipe also
+-- terminates with the same value.
 leftResultP :: Monad m => Pipe lo a b u m r -> Pipe lo a b (Either u s) m (Either r s)
 leftResultP (Yield   x p) = Yield   x (leftResultP p)
 leftResultP (UnAwait x p) = UnAwait x (leftResultP p)
@@ -322,9 +322,9 @@ leftResultP (Await   f  ) = Await   go
           go (Left  (Left  u)) = leftResultP (f (Left  u))
           go (Left  (Right s)) = Done  (Right s)
 
--- | Modified a 'Pipe' to act on the right side of an 'Either' return type.  If the
--- upstream pipe terminates with a 'Left' value, the new pipe also terminates with
--- the same value.
+-- | Modified a 'Pipe' to act on the right side of an 'Either' return type.  If
+-- the upstream pipe terminates with a 'Left' value, the new pipe also
+-- terminates with the same value.
 rightResultP :: Monad m => Pipe lo a b u m r -> Pipe lo a b (Either s u) m (Either s r)
 rightResultP (Yield   x p) = Yield   x (rightResultP p)
 rightResultP (UnAwait x p) = UnAwait x (rightResultP p)
@@ -335,11 +335,11 @@ rightResultP (Await   f  ) = Await   go
           go (Left  (Right u)) = rightResultP (f (Left  u))
           go (Left  (Left  s)) = Done   (Left s)
 
--- | Converts a 'Pipe' with 'Leftovers' into a 'Pipe' without 'Leftovers', which just
--- returns its leftover values as part of the result.  The leftovers returned are in
--- the order in which they would be obtained from future awaits, so the first element
--- of the list would be the first obtained (and was therefore the last value
--- unawaited).
+-- | Converts a 'Pipe' with 'Leftovers' into a 'Pipe' without 'Leftovers',
+-- which just returns its leftover values as part of the result.  The leftovers
+-- returned are in the order in which they would be obtained from future
+-- awaits, so the first element of the list would be the first obtained (and
+-- was therefore the last value unawaited).
 collectLeftovers :: Monad m => Pipe Leftovers a b u m r -> Pipe NoLeftovers a b u m (r, [a])
 collectLeftovers = go []
     where go xs     (Yield   x p) = Yield x (go xs p)
@@ -349,20 +349,20 @@ collectLeftovers = go []
           go xs     (Do      m  ) = Do    (liftM (go xs) m)
           go xs     (Done    r  ) = Done  (r, xs)
 
--- | Converts a 'Pipe' with 'Leftovers' into a 'Pipe' without 'Leftovers', by
--- discarding any leftovers remaining after the original pipe terminates.
+-- | Converts a 'Pipe' with 'Leftovers' into a 'Pipe' without 'Leftovers',
+-- by discarding any leftovers remaining after the original pipe terminates.
 discardLeftovers :: Monad m => Pipe Leftovers a b u m r -> Pipe NoLeftovers a b u m r
 discardLeftovers = fmap fst . collectLeftovers
 
--- | Executes a pipe in a simulated environment.  The environment is represented by a
--- monad transformer, and actions are provided to respond to the awaits and yields.
--- This can be used to execute single stages of a pipe that are not yet a complete
--- pipeline.  Note that since 'Pipe' is itself a monad transformer, this can also be
--- used to isolate a pipe and run it with checks in the context of a surrounding
--- pipeline.
+-- | Executes a pipe in a simulated environment.  The environment is
+-- represented by a monad transformer, and actions are provided to respond to
+-- the awaits and yields.  This can be used to execute single stages of a pipe
+-- that are not yet a complete pipeline.  Note that since 'Pipe' is itself a
+-- monad transformer, this can also be used to isolate a pipe and run it with
+-- checks in the context of a surrounding pipeline.
 --
--- To simulate a pipe with leftovers, first use 'collectLeftovers' or 'discardLeftovers'
--- to specify what to do with them.
+-- To simulate a pipe with leftovers, first use 'collectLeftovers' or
+-- 'discardLeftovers' to specify what to do with them.
 simulatePipe :: (Monad m, MonadTrans t, Monad (t m))
              => t m (Either u a)
              -> (b -> t m ())
@@ -378,8 +378,8 @@ simulatePipe up down (Done    x)   = return x
 -- so that no yields are possible (except for bottoms, which will result in
 -- runtime errors).
 --
--- To run a pipe with leftovers, first use 'collectLeftovers' or 'discardLeftovers'
--- to specify what to do with them.
+-- To run a pipe with leftovers, first use 'collectLeftovers' or
+-- 'discardLeftovers' to specify what to do with them.
 runPipe :: Monad m => Pipe NoLeftovers () Void u m r -> m r
 runPipe = runIdentityT
         . simulatePipe (return (Right ()))
@@ -387,9 +387,15 @@ runPipe = runIdentityT
 
 -- | A version of 'tryAwait' that directly returns the upstream value.  If the
 -- upstream pipe terminates instead, the result will be a 'Left' value, which
--- automatically propogates in the 'EitherT' monad.  Uses of 'await' are usually
--- paired with a corresponding 'withAwait' that is used to produce the upstream
--- result as a return value.
+-- automatically propogates in the 'EitherT' monad.  Uses of 'await' are
+-- usually paired with a corresponding 'withAwait' that is used to produce the
+-- upstream result as a return value.
+--
+-- For example:
+-- > p = withAwait $ do
+-- >         ...
+-- >         x <- await
+-- >         ...
 await :: MonadStream m => EitherT (StreamResult m) m (Upstream m)
 await = tryAwait >>= either left return
 
@@ -403,8 +409,8 @@ withAwait = liftM (either id id) . runEitherT
 -- | Lifts a function into an identity pipe that transforms the result.  In
 -- general, @p >+> mapResultP f == liftM f p@, but it's occasionally convenient
 -- to use composition instead of 'liftM' or 'fmap'.  This embeds the category
--- of functions inside the 'FinalC' category in a way that preserves composition
--- and identities.
+-- of functions inside the 'FinalC' category in a way that preserves
+-- composition and identities.
 mapResultP :: (MonadStream m, Upstream m ~ Downstream m) => (StreamResult m -> r) -> m r
 mapResultP f = liftM f idP
 
@@ -414,14 +420,15 @@ mapResultP f = liftM f idP
 forP :: MonadStream m => (Upstream m -> m r) -> m (StreamResult m)
 forP f = tryAwait >>= either return ((>> forP f) . f)
 
--- | Lifts a function to a pipe that applies the function to each upstream value,
--- keeping the upstream return value.  This embeds the category of functions inside
--- the 'PipeC' category in a way that preserves composition and identities.
+-- | Lifts a function to a pipe that applies the function to each upstream
+-- value, keeping the upstream return value.  This embeds the category of
+-- functions inside the 'PipeC' category in a way that preserves composition
+-- and identities.
 mapP :: MonadStream m => (Upstream m -> Downstream m) -> m (StreamResult m)
 mapP f = forP (yield . f)
 
--- | Lifts a function to a pipe, where the function maps each single input to many
--- output values.
+-- | Lifts a function to a pipe, where the function maps each single input
+-- to many output values.
 concatMapP :: MonadStream m => (Upstream m -> [Downstream m]) -> m (StreamResult m)
 concatMapP f = forP (mapM_ yield . f)
 
@@ -431,13 +438,13 @@ filterP :: (MonadStream m, Upstream m ~ Downstream m) => (Upstream m -> Bool) ->
 filterP f = forP $ \x -> when (f x) (yield x)
 
 -- | The identity pipe.  This is the identity for both the 'PipeC' and 'FinalC'
--- categories.  It passes through all upstream values, and then returns with the
--- upstream return.
+-- categories.  It passes through all upstream values, and then returns with
+-- the upstream return.
 idP :: (MonadStream m, Upstream m ~ Downstream m) => m (StreamResult m)
 idP = mapP id
 
--- | A pipe that accumulates its input, and then returns the result, in a manner
--- like a left fold.  The pipe never yields values.
+-- | A pipe that accumulates its input, and then returns the result, in a
+-- manner like a left fold.  The pipe never yields values.
 foldP :: MonadStream m => (a -> Upstream m -> a) -> a -> m (a, StreamResult m)
 foldP f x = tryAwait >>= either (return . (x,)) (foldP f . f x)
 
@@ -461,7 +468,8 @@ fromList :: MonadStream m => [Downstream m] -> m ()
 fromList xs = mapM_ yield xs
 
 -- | Concatenates a stream of values of some monoid.  The pipe yields nothing,
--- but terminates when the upstream does, with the resulting concatenated value.
+-- but terminates when the upstream does, with the resulting concatenated
+-- value.
 mconcatP :: (MonadStream m, Monoid (Upstream m)) => m (Upstream m)
 mconcatP = liftM fst (foldP mappend mempty)
 
@@ -479,17 +487,17 @@ consumeToo = tryAwait >>= either (return . ([],)) (\x -> liftM (first (x:)) cons
 peek :: MonadUnStream m => m (Either (StreamResult m) (Upstream m))
 peek = tryAwait >>= either (return . Left) (\x -> unawait x >> return (Right x))
 
--- | This category wraps 'Pipe' as a promise that pipe composition forms a category
--- for pipes without leftovers, with respect to the upstream and downstream data
--- types.
+-- | This category wraps 'Pipe' as a promise that pipe composition forms a
+-- category for pipes without leftovers, with respect to the upstream and
+-- downstream data types.
 newtype PipeC m r a b = PipeC (Pipe NoLeftovers a b r m r)
 instance Monad m => Category (PipeC m r) where
     id                    = PipeC idP
     (PipeC p) . (PipeC q) = PipeC (q >+> p)
 
--- | This category wraps 'Pipe' as a promise that pipe composition forms a category
--- for pipes without leftovers, with respect to the upstream and downstream result
--- types.
+-- | This category wraps 'Pipe' as a promise that pipe composition forms a
+-- category for pipes without leftovers, with respect to the upstream and
+-- downstream result types.
 newtype FinalC a m u r = FinalC (Pipe NoLeftovers a a u m r)
 instance Monad m => Category (FinalC a m) where
     id                      = FinalC idP

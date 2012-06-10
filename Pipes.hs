@@ -73,9 +73,16 @@ import Control.Arrow hiding (left)
 import Control.Category
 import Control.Monad
 import Control.Monad.Trans
+import Control.Monad.Trans.Cont
 import Control.Monad.Trans.Either
+import Control.Monad.Trans.Error
+import Control.Monad.Trans.List
 import Control.Monad.Trans.Identity
+import Control.Monad.Trans.Maybe
+import Control.Monad.Trans.Reader
 import Control.Monad.Trans.State
+import Control.Monad.Trans.Writer
+import Control.Monad.Trans.RWS
 import Data.Monoid
 import Data.Void
 
@@ -103,6 +110,30 @@ class Monad m => MonadStream m where
     -- the downstream stage never awaits another value.
     yield    :: Downstream m -> m ()
 
+instance MonadStream m => MonadStream (IdentityT m) where
+    type Upstream     (IdentityT m) = Upstream     m
+    type Downstream   (IdentityT m) = Downstream   m
+    type StreamResult (IdentityT m) = StreamResult m
+
+    yield = lift . yield
+    tryAwait = lift tryAwait
+
+instance MonadStream m => MonadStream (ListT m) where
+    type Upstream     (ListT m) = Upstream     m
+    type Downstream   (ListT m) = Downstream   m
+    type StreamResult (ListT m) = StreamResult m
+
+    yield = lift . yield
+    tryAwait = lift tryAwait
+
+instance MonadStream m => MonadStream (MaybeT m) where
+    type Upstream     (MaybeT m) = Upstream     m
+    type Downstream   (MaybeT m) = Downstream   m
+    type StreamResult (MaybeT m) = StreamResult m
+
+    yield = lift . yield
+    tryAwait = lift tryAwait
+
 instance MonadStream m => MonadStream (EitherT e m) where
     type Upstream     (EitherT e m) = Upstream     m
     type Downstream   (EitherT e m) = Downstream   m
@@ -111,10 +142,50 @@ instance MonadStream m => MonadStream (EitherT e m) where
     yield = lift . yield
     tryAwait = lift tryAwait
 
+instance MonadStream m => MonadStream (ContT r m) where
+    type Upstream     (ContT r m) = Upstream     m
+    type Downstream   (ContT r m) = Downstream   m
+    type StreamResult (ContT r m) = StreamResult m
+
+    yield = lift . yield
+    tryAwait = lift tryAwait
+
+instance (MonadStream m, Error e) => MonadStream (ErrorT e m) where
+    type Upstream     (ErrorT e m) = Upstream     m
+    type Downstream   (ErrorT e m) = Downstream   m
+    type StreamResult (ErrorT e m) = StreamResult m
+
+    yield = lift . yield
+    tryAwait = lift tryAwait
+
+instance MonadStream m => MonadStream (ReaderT r m) where
+    type Upstream     (ReaderT r m) = Upstream     m
+    type Downstream   (ReaderT r m) = Downstream   m
+    type StreamResult (ReaderT r m) = StreamResult m
+
+    yield = lift . yield
+    tryAwait = lift tryAwait
+
 instance MonadStream m => MonadStream (StateT s m) where
     type Upstream     (StateT s m) = Upstream     m
     type Downstream   (StateT s m) = Downstream   m
     type StreamResult (StateT s m) = StreamResult m
+
+    yield = lift . yield
+    tryAwait = lift tryAwait
+
+instance (MonadStream m, Monoid w) => MonadStream (WriterT w m) where
+    type Upstream     (WriterT w m) = Upstream     m
+    type Downstream   (WriterT w m) = Downstream   m
+    type StreamResult (WriterT w m) = StreamResult m
+
+    yield = lift . yield
+    tryAwait = lift tryAwait
+
+instance (MonadStream m, Monoid w) => MonadStream (RWST r w s m) where
+    type Upstream     (RWST r w s m) = Upstream     m
+    type Downstream   (RWST r w s m) = Downstream   m
+    type StreamResult (RWST r w s m) = StreamResult m
 
     yield = lift . yield
     tryAwait = lift tryAwait
@@ -134,10 +205,34 @@ class MonadStream m => MonadUnStream m where
     -- 'unawait'ed, treating the upstream as a kind of stack.
     unawait :: Upstream m -> m ()
 
+instance MonadUnStream m => MonadUnStream (IdentityT m) where
+    unawait = lift . unawait
+
+instance MonadUnStream m => MonadUnStream (ListT m) where
+    unawait = lift . unawait
+
+instance MonadUnStream m => MonadUnStream (MaybeT m) where
+    unawait = lift . unawait
+
 instance MonadUnStream m => MonadUnStream (EitherT e m) where
     unawait = lift . unawait
 
+instance MonadUnStream m => MonadUnStream (ContT r m) where
+    unawait = lift . unawait
+
+instance (MonadUnStream m, Error e) => MonadUnStream (ErrorT e m) where
+    unawait = lift . unawait
+
+instance MonadUnStream m => MonadUnStream (ReaderT r m) where
+    unawait = lift . unawait
+
 instance MonadUnStream m => MonadUnStream (StateT s m) where
+    unawait = lift . unawait
+
+instance (MonadUnStream m, Monoid w) => MonadUnStream (WriterT w m) where
+    unawait = lift . unawait
+
+instance (MonadUnStream m, Monoid w) => MonadUnStream (RWST r w s m) where
     unawait = lift . unawait
 
 -- | The central type for streaming monadic actions.  A 'Pipe' wraps another

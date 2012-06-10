@@ -205,35 +205,16 @@ class MonadStream m => MonadUnStream m where
     -- 'unawait'ed, treating the upstream as a kind of stack.
     unawait :: Upstream m -> m ()
 
-instance MonadUnStream m => MonadUnStream (IdentityT m) where
-    unawait = lift . unawait
-
-instance MonadUnStream m => MonadUnStream (ListT m) where
-    unawait = lift . unawait
-
-instance MonadUnStream m => MonadUnStream (MaybeT m) where
-    unawait = lift . unawait
-
-instance MonadUnStream m => MonadUnStream (EitherT e m) where
-    unawait = lift . unawait
-
-instance MonadUnStream m => MonadUnStream (ContT r m) where
-    unawait = lift . unawait
-
-instance (MonadUnStream m, Error e) => MonadUnStream (ErrorT e m) where
-    unawait = lift . unawait
-
-instance MonadUnStream m => MonadUnStream (ReaderT r m) where
-    unawait = lift . unawait
-
-instance MonadUnStream m => MonadUnStream (StateT s m) where
-    unawait = lift . unawait
-
-instance (MonadUnStream m, Monoid w) => MonadUnStream (WriterT w m) where
-    unawait = lift . unawait
-
-instance (MonadUnStream m, Monoid w) => MonadUnStream (RWST r w s m) where
-    unawait = lift . unawait
+instance (MonadUnStream m          ) => MonadUnStream (IdentityT m)  where unawait = lift . unawait
+instance (MonadUnStream m          ) => MonadUnStream (ListT m)      where unawait = lift . unawait
+instance (MonadUnStream m          ) => MonadUnStream (MaybeT m)     where unawait = lift . unawait
+instance (MonadUnStream m          ) => MonadUnStream (EitherT e m)  where unawait = lift . unawait
+instance (MonadUnStream m          ) => MonadUnStream (ContT r m)    where unawait = lift . unawait
+instance (MonadUnStream m, Error e ) => MonadUnStream (ErrorT e m)   where unawait = lift . unawait
+instance (MonadUnStream m          ) => MonadUnStream (ReaderT r m)  where unawait = lift . unawait
+instance (MonadUnStream m          ) => MonadUnStream (StateT s m)   where unawait = lift . unawait
+instance (MonadUnStream m, Monoid w) => MonadUnStream (WriterT w m)  where unawait = lift . unawait
+instance (MonadUnStream m, Monoid w) => MonadUnStream (RWST r w s m) where unawait = lift . unawait
 
 -- | The central type for streaming monadic actions.  A 'Pipe' wraps another
 -- monad to add the capabilities of 'MonadStream', and optionally of

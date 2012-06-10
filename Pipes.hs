@@ -74,6 +74,7 @@ import Control.Category
 import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Trans.Either
+import Control.Monad.Trans.Identity
 import Control.Monad.Trans.State
 import Data.Monoid
 import Data.Void
@@ -295,15 +296,6 @@ simulatePipe up down (Yield   x p) = down x >> simulatePipe up down p
 simulatePipe up down (Await   f)   = simulatePipe up down . f =<< up
 simulatePipe up down (Do      m)   = lift m >>= simulatePipe up down
 simulatePipe up down (Done    x)   = return x
-
-newtype IdentityT m a = IdentityT { runIdentityT :: m a }
-
-instance Monad m => Monad (IdentityT m) where
-    return            = IdentityT . return
-    IdentityT m >>= f = IdentityT $ m >>= runIdentityT . f
-
-instance MonadTrans IdentityT where lift = IdentityT
-instance MonadIO m => MonadIO (IdentityT m) where liftIO = lift . liftIO
 
 -- | Executes a complete pipeline, giving back the result.  The upstream end is
 -- fed an infinite stream of unit values, and the downstream end is set to Void
